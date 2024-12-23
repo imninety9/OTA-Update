@@ -243,7 +243,7 @@ def main():
     
     # log some one time info to Adafruit IO server, once connected
     try:
-        mqtt_functions.publish_data(client, {"INFO": f"Reset cause: {cause}"})
+        mqtt_functions.publish_data(client, {AIO_FEED_STATUS: f"INFO - Reset cause: {cause}"})
     except Exception as e:
         logger.log_message("ERROR", f"Error publishing to Adafruit IO.")
 
