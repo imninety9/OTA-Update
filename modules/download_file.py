@@ -7,7 +7,7 @@ from machine import reset
 from time import sleep
 import os
 
-from simple_logging impoer Logger # Import the Logger class
+from simple_logging import Logger # Import the Logger class
 
 # function to download a file from github repo over the air
 def dwnld_file(url, filename, logger: Logger, chunk_size = 1024, max_retries=3): # Adjust chunk size (bytes)
