@@ -9,3 +9,5 @@ class SetupError(Exception):
 #        --- it probably means our mqtt connection is lost, hence reconnect
 class MQTTPublishingError(Exception):
     pass
+
+# maybe create WiFiError, etc
