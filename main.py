@@ -68,7 +68,7 @@ def generate_aio_feeds_and_url(AIO_USER, owm_api_key, lat, long):
         url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={long}&appid={owm_api_key}&units=metric"
     except Exception as e:
         logger.log_message("ERROR", f"Failed to initialize variables: {e}")
-        raise StupError("Failed to generate variable")
+        raise SetupError("Failed to generate variable")
     
 # sync rtc with ntp server (internet is needed for this)
 def sync_time_with_ntp(ntp_retry_timer, attempt = 0, max_attempts = 3):
@@ -231,7 +231,7 @@ def main():
         
         '''We are resetting the device for any error in setup, since this is critical for running of our project'''
         '''Improvement: 1. for errors in 'initialization of sensors' or 'initialization of mqtt client' etc, the device will
-                            keep resetting quite regularly. Add some failsafe for this.'''
+                            keep resetting quite regularly. Add some failsafe for this, such as running only with available sensors.'''
     except SetupError as se:
         logger.log_message("CRITICAL", f"Setup error occurred: {se}. Resetting the Device...")
         sleep(10)
