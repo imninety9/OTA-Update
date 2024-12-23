@@ -30,8 +30,8 @@ import config # configuration file
 from custom_exceptions import SetupError, MQTTPublishingError
 from download_file import dwnld_and_update
 
-from simple_logging import Logger  # Import the logger
-# Initialize logger
+from simple_logging import Logger  # Import the Logger class
+# Initialize logger instance
 logger = Logger(debug_mode=config.DEBUG_MODE)
 
 
@@ -102,11 +102,11 @@ def fetch_weather_data():
     global last_weather_data
     try:
         if weather_fetch_counter >= (WEATHER_FETCH_DELAY-1):
-            #utils.log_memory() # DEBUG
+            #utils.log_memory(logger) # DEBUG
             response = urequests.get(url)#, timeout=10)
             weather_data = response.json()
             response.close()
-            #utils.log_memory()
+            #utils.log_memory(logger)
             if 'main' in weather_data:
                 temperature = weather_data['main']['temp']
                 feels_like_temp = weather_data['main']['feels_like']
@@ -129,7 +129,7 @@ def fetch_weather_data():
 # function to oragnize publishing data
 def organize_data(aht_sensor, bmp_sensor):
     try:
-        pressure, temperature_bmp, humidity, temperature = sensors.read_sensors(aht_sensor, bmp_sensor)
+        pressure, temperature_bmp, humidity, temperature = sensors.read_sensors(aht_sensor, bmp_sensor, logger)
         
         weather_out_data = fetch_weather_data()
         temperature_out, feels_like_temp_out, humidity_out, pressure_out = weather_out_data  
@@ -150,6 +150,7 @@ def organize_data(aht_sensor, bmp_sensor):
     
 
 # callback function for subscription feed
+# NOTE: We are using global variable 'logger' inside callback function
 def feed_callback(feed, msg):
     """Callback for MQTT received message."""
     '''
@@ -185,7 +186,7 @@ def main():
     
     logger.log_message("DEBUG", "Restarted!!!")
     
-    cause = utils.reset_cause() # reset cause
+    cause = utils.reset_cause(logger) # reset cause
     
     # SET-UP
     try:
@@ -193,7 +194,7 @@ def main():
         generate_aio_feeds_and_url(config.AdafruitIO_USER, config.owm_api_key, config.latitude, config.longitude)
         
         # connect to wifi
-        wifi = utils.retry_with_backoff(connect_wifi.connect_to_wifi, config.wifi_networks,
+        wifi = utils.retry_with_backoff(logger, connect_wifi.connect_to_wifi, config.wifi_networks, logger, 
                                         max_retries = 7, backoff_base = 15,
                                         long_sleep_duration=config.LONG_SLEEP_DURATION)
         
@@ -211,7 +212,8 @@ def main():
             keepalive=config.KEEP_ALIVE_INTERVAL,
             will_feed=AIO_FEED_COMMAND,  # LWT Topic
             will_message=config.LAST_WILL_MESSAGE,
-            callback=feed_callback
+            callback=feed_callback,
+            logger=logger
         )
         
         # update the logger for publishing
@@ -220,14 +222,14 @@ def main():
         
         # Connect to MQTT broker
         if client and wifi.isconnected():
-            utils.retry_with_backoff(mqtt_functions.connect_mqtt, client,
+            utils.retry_with_backoff(logger, mqtt_functions.connect_mqtt, client, logger, 
                                      max_retries = 7, backoff_base = config.BACKOFF_BASE,
                                      long_sleep_duration=config.LONG_SLEEP_DURATION//2)
         # subscribe to the feed
-        mqtt_functions.subscribe_feed(client, AIO_FEED_COMMAND)
+        mqtt_functions.subscribe_feed(client, AIO_FEED_COMMAND, logger)
         
         # initialize the sensors
-        aht_sensor, bmp_sensor = sensors.init_sensors()
+        aht_sensor, bmp_sensor = sensors.init_sensors(logger)
         
         '''We are resetting the device for any error in setup, since this is critical for running of our project'''
         '''Improvement: 1. for errors in 'initialization of sensors' or 'initialization of mqtt client' etc, the device will
@@ -243,7 +245,7 @@ def main():
     
     # log some one time info to Adafruit IO server, once connected
     try:
-        mqtt_functions.publish_data(client, {AIO_FEED_STATUS: f"INFO - Reset cause: {cause}"})
+        mqtt_functions.publish_data(client, {AIO_FEED_STATUS: f"INFO - Reset cause: {cause}"}, logger)
     except Exception as e:
         logger.log_message("ERROR", f"Error publishing to Adafruit IO.")
 
@@ -252,38 +254,38 @@ def main():
         try:
             if not wifi.isconnected():
                 log_message("WARNING", "Device status: Disconnected from Wi-Fi")
-                wifi = utils.retry_with_backoff(connect_wifi.connect_to_wifi, config.wifi_networks,
+                wifi = utils.retry_with_backoff(logger, connect_wifi.connect_to_wifi, config.wifi_networks, logger, 
                                         max_retries = 7, backoff_base = 15,
                                         long_sleep_duration=config.LONG_SLEEP_DURATION)
                 # reconnect to mqtt server
-                utils.retry_with_backoff(mqtt_functions.connect_mqtt, client,
+                utils.retry_with_backoff(logger, mqtt_functions.connect_mqtt, client, logger, 
                                      max_retries = 7, backoff_base = config.BACKOFF_BASE,
                                      long_sleep_duration=config.LONG_SLEEP_DURATION//2)
                 # re-subscribe to feed
-                mqtt_functions.subscribe_feed(client, AIO_FEED_COMMAND)
+                mqtt_functions.subscribe_feed(client, AIO_FEED_COMMAND, logger)
             try:
                 client.check_msg() # Check for any incoming MQTT messages (will raise an error if mqtt connection is lost)
             except OSError as e:
                 logger.log_message("ERROR", f"MQTT check message error (OSError): {e}")
                 if wifi.isconnected():
                     # reconnect to mqtt server
-                    utils.retry_with_backoff(mqtt_functions.connect_mqtt, client,
+                    utils.retry_with_backoff(logger, mqtt_functions.connect_mqtt, client, logger, 
                                          max_retries = 7, backoff_base = config.BACKOFF_BASE,
                                          long_sleep_duration=config.LONG_SLEEP_DURATION//2)
                     # re-subscribe to feed
-                    mqtt_functions.subscribe_feed(client, AIO_FEED_COMMAND)
+                    mqtt_functions.subscribe_feed(client, AIO_FEED_COMMAND, logger)
             except Exception as e:
                 logger.log_message("ERROR", f"MQTT check message error (Other): {e}")
                 if wifi.isconnected():
                     # reconnect to mqtt server
-                    utils.retry_with_backoff(mqtt_functions.connect_mqtt, client,
+                    utils.retry_with_backoff(logger, mqtt_functions.connect_mqtt, client, logger, 
                                          max_retries = 7, backoff_base = config.BACKOFF_BASE,
                                          long_sleep_duration=config.LONG_SLEEP_DURATION//2)
                     # re-subscribe to feed
-                    mqtt_functions.subscribe_feed(client, AIO_FEED_COMMAND)
+                    mqtt_functions.subscribe_feed(client, AIO_FEED_COMMAND, logger)
             
             # publish the data to mqtt server
-            mqtt_functions.publish_data(client, organize_data(aht_sensor, bmp_sensor))
+            mqtt_functions.publish_data(client, organize_data(aht_sensor, bmp_sensor), logger)
             gc.collect()
             
         except SetupError as se:
@@ -296,11 +298,11 @@ def main():
             sleep(5)
             if wifi.isconnected():
                 # reconnect to mqtt server
-                utils.retry_with_backoff(mqtt_functions.connect_mqtt, client,
+                utils.retry_with_backoff(logger, mqtt_functions.connect_mqtt, client, logger, 
                                      max_retries = 7, backoff_base = config.BACKOFF_BASE,
                                      long_sleep_duration=config.LONG_SLEEP_DURATION//2)
                 # re-subscribe to feed
-                mqtt_functions.subscribe_feed(client, AIO_FEED_COMMAND)
+                mqtt_functions.subscribe_feed(client, AIO_FEED_COMMAND, logger)
         
         except Exception as e:
             logger.log_message("ERROR", f"Unknown main loop exception: {e}", publish=True)
