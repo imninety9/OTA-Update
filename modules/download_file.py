@@ -7,15 +7,18 @@ from machine import reset
 from time import sleep
 import os
 
+from simple_logging impoer Logger # Import the Logger class
+
 # function to download a file from github repo over the air
-def dwnld_file(url, filename, chunk_size = 1024, max_retries=3): # Adjust chunk size (bytes)
+def dwnld_file(url, filename, logger: Logger, chunk_size = 1024, max_retries=3): # Adjust chunk size (bytes)
+    # logger is expected to be of type Logger (i.e. an instance of Logger class)
     retry_count = 0
     while retry_count < max_retries:
         try:
-            print("Starting download...")
+            logger.log_message("INFO", "Starting download...")
             response = urequests.get(url, stream=True, timeout=15)
             if response.status_code == 200:
-                print(f"Downloading {filename}")
+                logger.log_message("INFO", f"Downloading {filename}")
                 gc.collect()
                 with open(f'{filename}.new', 'wb') as f:
                     while True:
@@ -24,23 +27,23 @@ def dwnld_file(url, filename, chunk_size = 1024, max_retries=3): # Adjust chunk 
                             break
                         f.write(chunk)
                         gc.collect()
-                print(f"Download of {filename} completed.")
+                logger.log_message("INFO", f"Download of {filename} completed.")
                 return True
             else:
-                print(f"HTTP status code: {response.status_code}")
+                logger.log_message("ERROR", f"HTTP status code: {response.status_code}")
                 return False
         except OSError as e:
-            print("OS error occurred. Retrying...")
+            logger.log_message("ERROR", "OS error occurred. Retrying...")
             retry_count += 1
             if retry_count < max_retries:
                 retry_interval = retry_delay * (2 ** (retry_count - 1))
-                print(f"Retrying in {retry_interval} seconds...")
+                logger.log_message("INFO", f"Retrying in {retry_interval} seconds...")
                 sleep(retry_interval)
             else:
-                print(f"Max retries exceeded. Failed to download {filename}.")
+                logger.log_message("ERROR", f"Max retries exceeded. Failed to download {filename}.")
                 return False
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            logger.log_message("ERROR", f"Unexpected error: {e}")
             break
         finally: # before retrying
             if response:
@@ -48,6 +51,7 @@ def dwnld_file(url, filename, chunk_size = 1024, max_retries=3): # Adjust chunk 
             gc.collect()
     return False
 
+# check if a file exist or not
 def file_exists(filename):
     try:
         os.stat(filename)
@@ -55,22 +59,23 @@ def file_exists(filename):
     except OSError:
         return False
     
-    
-def dwnld_and_update(filename):
+# download and save the file in the microcontroller (by replacing its older version, if exists)    
+def dwnld_and_update(filename, logger: Logger): # filename is the full filename of the file including the directory structure
     sleep(1)
     try:
         url = f'https://raw.githubusercontent.com/{config.REPO_OWNER}/{config.REPO_NAME}/main/{filename}'
         if dwnld_file(url, filename):
             # some file manipulations
             if file_exists(filename):
-                os.remove(filename)
+                os.remove(filename) # remove the older version, if it exists
             os.rename(f'{filename}.new', filename)
             
-            print("Update successful. Restarting...")
+            logger.log_message("INFO", "Update successful. Restarting...")
             sleep(10)
             reset()
     except Exception as e:
-        print(f"Error in main function: {e}")
-        
+        logger.log_message("ERROR", f"Error in dwnld_and_update function: {e}")
+
+######################################
 if __name__ == '__main__':
     dwnld_and_update()

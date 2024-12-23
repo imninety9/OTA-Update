@@ -7,12 +7,10 @@ import gc
 import config
 from custom_exceptions import SetupError
 
-from simple_logging import Logger  # Import the logger
-# Initialize logger
-logger = Logger(debug_mode=config.DEBUG_MODE)
+from simple_logging import Logger  # Import the Logger class
 
 # Get the cause of the reset
-def reset_cause():
+def reset_cause(logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     try:
         rst_cause = machine.reset_cause()
         causes = {
@@ -34,7 +32,7 @@ def reset():
     machine.reset()
     
 # DEEP sleep
-def deep_sleep(duration_ms):
+def deep_sleep(duration_ms, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     """Put the microcontroller into deep sleep for the specified duration."""
     '''Currently, deep_sleep logs before entering sleep. If power is lost before deep sleep, the message is not persisted.'''
     '''Improvement: Flush logs before sleeping using os.sync().'''
@@ -44,7 +42,7 @@ def deep_sleep(duration_ms):
     machine.deepsleep(duration_ms)
 
 # Retry logic with backoff for any function
-def retry_with_backoff(function, *args, max_retries=5, backoff_base=10, long_sleep_duration=3600*1000, **kwargs):
+def retry_with_backoff(logger: Logger, function, *args, max_retries=5, backoff_base=10, long_sleep_duration=3600*1000, **kwargs): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     """Generalized retry logic with exponential backoff."""
     '''
         function = function on which we want to apply retry logic
@@ -61,18 +59,18 @@ def retry_with_backoff(function, *args, max_retries=5, backoff_base=10, long_sle
                 return result # function executed successfully, no retries needed, just return the function result
             sleep_time = min(backoff_base * (2 ** retry_count), 300)  # Cap at 5 minutes
             logger.log_message("WARNING", f"{function} execution unsuccessful. Retrying in {sleep_time} seconds...")
-            deep_sleep(sleep_time * 1000)
+            deep_sleep(sleep_time * 1000, logger)
             retry_count += 1
         except Exception as e:
             logger.log_message("ERROR", f"Error during retry {retry_count + 1} of {function}: {e}")
             retry_count += 1
-            deep_sleep(10 * 1000)
+            deep_sleep(10 * 1000, logger)
     logger.log_message("CRITICAL", "Max retries reached. Entering long sleep.")
-    deep_sleep(long_sleep_duration) # This will help in case of longer periods with no available wifi/internet
+    deep_sleep(long_sleep_duration, logger) # This will help in case of longer periods with no available wifi/internet
     raise SetupError("Max rtries reached for {function}")
 
 # log the memory status
-def log_memory():
+def log_memory(logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     try:
         free_memory = gc.mem_free()
         logger.log_message("INFO", f"Free memory: {free_memory}")

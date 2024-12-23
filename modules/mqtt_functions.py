@@ -120,27 +120,73 @@ import utils
 import config
 from custom_exceptions import SetupError, MQTTPublishingError
 
-from simple_logging import Logger  # Import the logger
-# Initialize logger
-logger = Logger(debug_mode = config.DEBUG_MODE)
+from simple_logging import Logger  # Import the Logger class
 
-# callback function
+
+'''
+NOTE=>
+
+We cannot define the MQTT callback function as def feed_callback(feed, msg, arg1, arg2): directly, because the callback signature for MQTT messages is predefined by the MQTT client library you are using (e.g., umqtt.simple or paho.mqtt). In most MQTT libraries, the callback function signature accepts only two parameters:
+feed: The topic or feed to which the message was published.
+msg: The message content.
+
+===========
+
+Why Adding Extra Arguments (arg1, arg2) Is Not Allowed:
+MQTT client callback functions are designed to be triggered by the library itself when a message is received on a subscribed topic. The library automatically passes the topic (feed) and the message (msg) as parameters, but it does not automatically handle additional custom arguments (arg1, arg2), which are not part of the library's expected signature.
+The MQTT client, when invoking the callback, does not know how to pass additional arguments unless you explicitly handle it within the function. If you try to define more parameters in the callback, you will likely encounter a TypeError because the callback function does not match the signature expected by the client library.
+
+===========
+
+How to Handle Additional Arguments in the Callback:
+1. Use a Global or Shared Variable-
+Use a global variable or an object that stores the additional arguments, which can be accessed within the callback.
+---------------
+# Define global variables for additional arguments
+global_arg1 = "extra_arg1"
+global_arg2 = "extra_arg2"
+
 def feed_callback(feed, msg):
-    """Callback for MQTT received message."""
-    '''
-        feed: the subscribed feed or topic
-        msg: the received message
-    '''
-    try:
-        feed = feed.decode('utf-8')
-        msg = msg.decode('utf-8')
-        logger.log_message("INFO", f"Received message on {feed}: {msg}", publish = True)
-        return feed, msg
-    except Exception as e:
-        logger.log_message("ERROR", f"Failed to read the received message: {e}")
+    print(f"Received message on {feed}: {msg}")
+    print(f"Additional args: {global_arg1}, {global_arg2}")
+---------------
+
+2. Object-Oriented Approach-
+If your application is more complex, you can use an object-oriented approach and store the additional arguments as attributes of an object. Then, your callback function can refer to the object's attributes.
+---------------
+class MQTTCallbackHandler:
+    def __init__(self, arg1, arg2):
+        self.arg1 = arg1
+        self.arg2 = arg2
+
+    def feed_callback(self, feed, msg):
+        print(f"Received message on {feed}: {msg}")
+        print(f"Additional args: {self.arg1}, {self.arg2}")
+----------------
+'''
+
+# callback handler
+class CallbackHandler:
+    def __init__(self, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
+        self.logger = logger
+        
+    # callback function
+    def feed_callback(self, feed, msg):
+        """Callback for MQTT received message."""
+        '''
+            feed: the subscribed feed or topic
+            msg: the received message
+        '''
+        try:
+            feed = feed.decode('utf-8')
+            msg = msg.decode('utf-8')
+            self.logger.log_message("INFO", f"Received message on {feed}: {msg}", publish = True)
+            return feed, msg
+        except Exception as e:
+            self.logger.log_message("ERROR", f"Failed to read the received message: {e}")
 
 # Initialize mqtt client
-def init_mqtt(client_id, broker, port, user, password, keepalive, will_feed, will_message, callback):
+def init_mqtt(client_id, broker, port, user, password, keepalive, will_feed, will_message, callback, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     """Initialize the MQTT client."""
     try:
         client = MQTTClient(
@@ -172,7 +218,7 @@ If the exception is not handled, the program will crash, and no further code wil
 '''
     
 # Connect mqtt client
-def connect_mqtt(client):
+def connect_mqtt(client, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     """Connect to MQTT broker with retries."""
     try:
         client.connect()
@@ -183,7 +229,7 @@ def connect_mqtt(client):
         return None
 
 # Subscribe to a feed
-def subscribe_feed(client, feed):
+def subscribe_feed(client, feed, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     '''function to subscribe to a feed to receive message'''
     try:
         client.subscribe(feed, qos = 1)
@@ -192,7 +238,8 @@ def subscribe_feed(client, feed):
         logger.log_message("ERROR", f"Failed to subscribe to feed {feed}: {e}", publish = True)
         
 # Publish data to mqtt server
-def publish_data(client, data): # data is a dictionary
+def publish_data(client, data, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
+    # data is a dictionary {"feed": "msg"}
     ''' publish the given data to their corresponding feeds'''
     try:
         for feed, msg in data.items():
@@ -206,9 +253,15 @@ def publish_data(client, data): # data is a dictionary
 # Example usage
 if __name__ == "__main__":
     try:
+        # Initialize the logger
+        logger = Logger(debug_mode=config.DEBUG_MODE)
+        
         # Connect to Wi-Fi
-        wifi = utils.retry_with_backoff(connect_wifi.connect_to_wifi, config.wifi_networks)
+        wifi = utils.retry_with_backoff(logger, connect_wifi.connect_to_wifi, config.wifi_networks, logger)
             
+        # feed callback handler
+        callback_handler = CallbackHandler(logger)
+        
         # Initialize MQTT
         client = init_mqtt(
             client_id=config.AdafruitIO_USER,
@@ -219,15 +272,16 @@ if __name__ == "__main__":
             keepalive=config.KEEP_ALIVE_INTERVAL,
             will_feed=f"{config.AdafruitIO_USER}/feeds/errors",  # LWT Topic
             will_message=b"ESP32 disconnected unexpectedly",
-            callback=feed_callback
+            callback=callback_handler.feed_callback,
+            logger=logger
         )
 
         # Connect to MQTT broker
         if client and wifi.isconnected():
-            utils.retry_with_backoff(connect_mqtt, client, long_sleep_duration=config.LONG_SLEEP_DURATION)
+            utils.retry_with_backoff(logger, connect_mqtt, client, logger, long_sleep_duration=config.LONG_SLEEP_DURATION)
 
     except SetupError as se:
-        logger.log_error("CRITICAL", f"Setup error occurred: {se}. Resetting the Device...")
+        logger.log_message("CRITICAL", f"Setup error occurred: {se}. Resetting the Device...")
         sleep(60)
         utils.reset()
         

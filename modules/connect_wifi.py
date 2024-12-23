@@ -14,12 +14,10 @@ import utils
 import config
 from custom_exceptions import SetupError
 
-from simple_logging import Logger  # Import the logger
-# Initialize logger
-logger = Logger(debug_mode = config.DEBUG_MODE)
+from simple_logging import Logger  # Import the Logger class
 
 # Internet connectivity check
-def check_internet(hosts=[("8.8.8.8", 53), ("1.1.1.1", 53)], timeout=3):
+def check_internet(logger: Logger, hosts=[("8.8.8.8", 53), ("1.1.1.1", 53)], timeout=3): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     """Check if the device has internet connectivity by attempting to open a socket to a DNS server."""
     '''Added a fallback to a secondary server (e.g., Cloudflare 1.1.1.1) in case the primary check fails.'''
     for host, port in hosts:
@@ -44,7 +42,7 @@ def check_internet(hosts=[("8.8.8.8", 53), ("1.1.1.1", 53)], timeout=3):
     '''
 
 # Disable access point (AP) mode if required
-def disable_ap_mode():
+def disable_ap_mode(logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     try:
         ap = network.WLAN(network.AP_IF)
         if ap.active():
@@ -54,14 +52,14 @@ def disable_ap_mode():
         logger.log_message("ERROR", f"Failed to disable WiFi AP mode: {e}")
 
 # Connect to a WiFi given a list of wifi_networks with their ssid and priority
-def connect_to_wifi(wifi_networks):
+def connect_to_wifi(wifi_networks, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     
     try:
         if wlan.isconnected():
             logger.log_message("INFO", f"Already connected to {wlan.config('essid')}")
-            if check_internet():
+            if check_internet(logger):
                 logger.log_message("INFO", "Internet is accessible.")
                 return wlan # DONE, already connected to a network with internet connectivity (it may not be in the wifi_networks list)
             else:
@@ -90,7 +88,7 @@ def connect_to_wifi(wifi_networks):
                 for _ in range(timeout):
                     if wlan.isconnected():
                         logger.log_message("INFO", f"Connected to {wifi_network['ssid']}. Checking internet...")
-                        if check_internet():
+                        if check_internet(logger):
                             logger.log_message("INFO", "Internet is accessible.")
                             return wlan
                         else:
@@ -110,10 +108,13 @@ def connect_to_wifi(wifi_networks):
 # Main execution
 if __name__ == "__main__":
     try:
-        disable_ap_mode()
-        wifi = utils.retry_with_backoff(connect_to_wifi, config.wifi_networks, long_sleep_duration=config.LONG_SLEEP_DURATION)
+        # Initialize the logger
+        logger = Logger(debug_mode=config.DEBUG_MODE)
+        
+        disable_ap_mode(logger)
+        wifi = utils.retry_with_backoff(logger, connect_to_wifi, config.wifi_networks, logger, long_sleep_duration=config.LONG_SLEEP_DURATION)
     except SetupError as se:
-        logger.log_error("CRITICAL", f"Setup error occurred: {se}. Resetting the Device...")
+        logger.log_message("CRITICAL", f"Setup error occurred: {se}. Resetting the Device...")
         utils.reset()
     except Exception as e:
         logger.log_message("CRITICAL", f"Error occurred: {e}")

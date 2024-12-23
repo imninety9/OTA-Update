@@ -8,12 +8,10 @@ import utils
 import config
 from custom_exceptions import SetupError
 
-from simple_logging import Logger  # Import the logger
-# Initialize logger
-logger = Logger(debug_mode = config.DEBUG_MODE)
+from simple_logging import Logger  # Import the Logger class
 
 # Initialize sensors
-def init_sensors():
+def init_sensors(logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     try:
         # Initialize SoftI2C with appropriate pins
         i2c = SoftI2C(sda=Pin(config.sdaPIN), scl=Pin(config.sclPIN))
@@ -34,12 +32,12 @@ def init_sensors():
         return sensor, bmp
     except Exception as e:
         logger.log_message("CRITICAL", f"Failed to initialize AHT25 or BMP280 sensor: {e}", publish = True)
-        utils.deep_sleep(120000) # ms
+        utils.deep_sleep(120000, logger) # ms
         raise SetupError("Sensor initialization failed")
     
     
 # Read Sensor data
-def read_sensors(aht_sensor, bmp_sensor):
+def read_sensors(aht_sensor, bmp_sensor, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     try:
         pressure = bmp_sensor.pressure
         temperature_bmp = bmp_sensor.temperature
