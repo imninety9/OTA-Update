@@ -9,8 +9,12 @@ I thought of utilizing the mqtt feed/topic to give a command of 'update' from ad
 The code is in micropython and runs on espp32.
 
 ## how?
-to update a file in the microcontroller, just upload the changed file in this github repository at its correct position and then give the following command over mqtt:
-      update-<filename>
-          where, <filename> should be complete filename including the directory structure 
-                  e.g. update-main.py
+to update a file in the microcontroller, just upload the changed file in this github repository at its correct position and then give the following command over mqtt:  
+
+      update-<filename>  
+      
+          where, <filename> should be complete filename including the directory structure   
+          
+                  e.g. update-main.py  
+                  
                   or, update-modules/config.py
