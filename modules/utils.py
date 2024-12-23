@@ -36,10 +36,11 @@ def deep_sleep(duration_ms, logger: Logger): # logger is expected to be of type 
     """Put the microcontroller into deep sleep for the specified duration."""
     '''Currently, deep_sleep logs before entering sleep. If power is lost before deep sleep, the message is not persisted.'''
     '''Improvement: Flush logs before sleeping using os.sync().'''
-    logger.log_message("INFO", f"Sleeping for {duration_ms / 1000} seconds...")
-    os.sync()  # Ensure all logs are written to disk
-    # Set the time (in ms) for deep sleep
-    machine.deepsleep(duration_ms)
+    if duration_ms > 0:
+        logger.log_message("INFO", f"Sleeping for {duration_ms / 1000} seconds...")
+        os.sync()  # Ensure all logs are written to disk
+        # Set the time (in ms) for deep sleep
+        machine.deepsleep(duration_ms)
 
 # Retry logic with backoff for any function
 def retry_with_backoff(logger: Logger, function, *args, max_retries=5, backoff_base=10, long_sleep_duration=3600*1000, **kwargs): # logger is expected to be of type Logger (i.e. an instance of Logger class)
@@ -65,7 +66,7 @@ def retry_with_backoff(logger: Logger, function, *args, max_retries=5, backoff_b
             logger.log_message("ERROR", f"Error during retry {retry_count + 1} of {function}: {e}")
             retry_count += 1
             deep_sleep(10 * 1000, logger)
-    logger.log_message("CRITICAL", "Max retries reached. Entering long sleep.")
+    logger.log_message("CRITICAL", f"Max retries reached of {function}. Entering deep sleep for {long_sleep_duration} ms.")
     deep_sleep(long_sleep_duration, logger) # This will help in case of longer periods with no available wifi/internet
     raise SetupError("Max rtries reached for {function}")
 
