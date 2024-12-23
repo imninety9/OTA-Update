@@ -170,7 +170,7 @@ def feed_callback(feed, msg):
         if msg.strip().split("-")[0] == "update":
             logger.log_message("INFO", "Update command received. Updating now...", publish=True)
             sleep(1)  # Short delay before updating
-            dwnld_and_update(msg.strip().split("-")[-1])
+            dwnld_and_update(msg.strip().split("-")[-1], logger)
     except Exception as e:
         logger.log_message("ERROR", f"Failed to execute the received message: {e}", publish=True)
 
