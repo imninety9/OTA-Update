@@ -78,4 +78,4 @@ def dwnld_and_update(filename, logger: Logger): # filename is the full filename 
 
 ######################################
 if __name__ == '__main__':
-    dwnld_and_update()
+    pass
