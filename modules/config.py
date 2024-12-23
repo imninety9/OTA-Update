@@ -12,6 +12,12 @@ wifi_networks = [
 sdaPIN = 21
 sclPIN = 22
 
+# SPI Pins
+SPI_PIN_MISO = 19
+SPI_PIN_MOSI = 23
+SPI_PIN_SCK = 18
+SPI_PIN_CS = 5
+
 owm_api_key = 'key'
 latitude = lat
 longitude = long
@@ -29,7 +35,8 @@ LONG_SLEEP_DURATION = 3600 * 1000 # millisec [= 1 hour]
 
 LAST_WILL_MESSAGE = b"ESP32 disconnected unexpectedly"
 
-LOG_FILE = '/errors.log'
+LOG_FILE = '/errors.log' # '/sd/errors.log'
+MAX_SIZE_BYTES = 100 * 1024  # in bytes (= 100 KB) [max allowed size of log files in bytes]
 
 DEBUG_MODE = True
 
