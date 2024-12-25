@@ -4,9 +4,7 @@ from machine import Pin, SPI
 import sdcard
 from os import VfsFat, mount, umount
 
-import utils
 import config
-from custom_exceptions import SetupError
 
 from simple_logging import Logger  # Import the Logger class
 
@@ -52,19 +50,17 @@ def unmount_sd_card(logger: Logger): # logger is expected to be of type Logger (
 ####################################
 if __name__ == "__main__":
     try:
+        import utils
+        
         # Initialize the logger
         logger = Logger(debug_mode=config.DEBUG_MODE)
         
         # initialize sd card
-        utils.retry_with_backoff(logger, initialize_sd, logger, max_retries=5, backoff_base=5, long_sleep_duration=300*1000)
+        utils.retry_with_backoff(logger, initialize_sd, logger, max_retries=5, backoff_base=5)
         
         # unmount sd card
         unmount_sd_card(logger)
         
-    except SetupError as se:
-        logger.log_message("CRITICAL", f"Setup error occurred: {se}. Resetting the Device...")
-        sleep(60)
-        utils.reset()
-        
     except Exception as e:
         logger.log_message("ERROR", f"Error: {e}")
+        

@@ -19,7 +19,7 @@ Specify the LWT message when initializing the MQTT client.
 QoS (Quality of Service)
 MQTT supports three QoS levels:
 QoS 0: At most once. No guarantee of delivery.
-QoS 1: At least once. Messages are retried until acknowledged.
+QoS 1: At least once. Messages may be delivered multiple times. Messages are retried until acknowledged.
 QoS 2: Exactly once. Ensures no duplicates or missing messages.
 Use QoS 1 or 2 for critical messages to improve reliability during publishing or subscribing.
 '''
@@ -113,12 +113,8 @@ disconnecting and then reconnectiong may be more power efficient.
 '''
 
 from umqtt.simple import MQTTClient
-from time import sleep
 
-import connect_wifi
-import utils
-import config
-from custom_exceptions import SetupError, MQTTPublishingError
+from custom_exceptions import MQTTPublishingError
 
 from simple_logging import Logger  # Import the Logger class
 
@@ -203,16 +199,15 @@ def init_mqtt(client_id, broker, port, user, password, keepalive, will_feed, wil
         return client
     except Exception as e:
         logger.log_message("ERROR", f"Failed to initialize MQTT client: {e}")
-        raise SetupError("MQTT client initialization failed")
-        #return None # REDUNTANT
+        return None
 '''
-Why 'return None' is Redundant?
+Why 'return None' becomes Redundant after a 'raise'?
 Flow of Execution in Python-
 When an exception is raised using the raise statement, the current function immediately terminates. Any code after the raise statement is never
 executed, which includes 'return None' and function exits immediately when the raise statement is executed.
 
 When the function fails:
-An exception (custome_exceptions.SetupError) is raised, which halts the function execution and propagates the exception to the caller.
+An exception is raised, which halts the function execution and propagates the exception to the caller.
 The caller must handle this exception to proceed, typically using a try-except block.
 If the exception is not handled, the program will crash, and no further code will be executed.
 '''
@@ -232,7 +227,7 @@ def connect_mqtt(client, logger: Logger): # logger is expected to be of type Log
 def subscribe_feed(client, feed, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
     '''function to subscribe to a feed to receive message'''
     try:
-        client.subscribe(feed, qos = 1)
+        client.subscribe(feed, qos = 2)
         logger.log_message("INFO", f"Subscribed to feed: {feed}", publish = True)
     except Exception as e:
         logger.log_message("ERROR", f"Failed to subscribe to feed {feed}: {e}", publish = True)
@@ -253,6 +248,10 @@ def publish_data(client, data, logger: Logger): # logger is expected to be of ty
 # Example usage
 if __name__ == "__main__":
     try:
+        import connect_wifi
+        import utils
+        import config
+        
         # Initialize the logger
         logger = Logger(debug_mode=config.DEBUG_MODE)
         
@@ -263,27 +262,22 @@ if __name__ == "__main__":
         callback_handler = CallbackHandler(logger)
         
         # Initialize MQTT
-        client = init_mqtt(
-            client_id=config.AdafruitIO_USER,
-            broker=config.AdafruitIO_SERVER,
-            port=config.AdafruitIO_PORT,
-            user=config.AdafruitIO_USER,
-            password=config.AdafruitIO_KEY,
-            keepalive=config.KEEP_ALIVE_INTERVAL,
-            will_feed=f"{config.AdafruitIO_USER}/feeds/errors",  # LWT Topic
-            will_message=b"ESP32 disconnected unexpectedly",
-            callback=callback_handler.feed_callback,
-            logger=logger
+        client = utils.retry_with_backoff(logger, init_mqtt,
+            config.AdafruitIO_USER,
+            config.AdafruitIO_SERVER,
+            config.AdafruitIO_PORT,
+            config.AdafruitIO_USER,
+            config.AdafruitIO_KEY,
+            config.KEEP_ALIVE_INTERVAL,
+            f"{config.AdafruitIO_USER}/feeds/errors",  # LWT Topic
+            b"ESP32 disconnected unexpectedly",
+            callback_handler.feed_callback,
+            logger
         )
 
         # Connect to MQTT broker
         if client and wifi.isconnected():
-            utils.retry_with_backoff(logger, connect_mqtt, client, logger, long_sleep_duration=config.LONG_SLEEP_DURATION)
-
-    except SetupError as se:
-        logger.log_message("CRITICAL", f"Setup error occurred: {se}. Resetting the Device...")
-        sleep(60)
-        utils.reset()
+            utils.retry_with_backoff(logger, connect_mqtt, client, logger)
         
     except Exception as e:
         logger.log_message("ERROR", f"Error: {e}")

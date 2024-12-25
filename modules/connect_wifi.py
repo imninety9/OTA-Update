@@ -10,10 +10,6 @@ import network
 import usocket
 from time import sleep
 
-import utils
-import config
-from custom_exceptions import SetupError
-
 from simple_logging import Logger  # Import the Logger class
 
 # Internet connectivity check
@@ -108,13 +104,13 @@ def connect_to_wifi(wifi_networks, logger: Logger): # logger is expected to be o
 # Main execution
 if __name__ == "__main__":
     try:
+        import utils
+        import config
+        
         # Initialize the logger
         logger = Logger(debug_mode=config.DEBUG_MODE)
         
         disable_ap_mode(logger)
-        wifi = utils.retry_with_backoff(logger, connect_to_wifi, config.wifi_networks, logger, long_sleep_duration=config.LONG_SLEEP_DURATION)
-    except SetupError as se:
-        logger.log_message("CRITICAL", f"Setup error occurred: {se}. Resetting the Device...")
-        utils.reset()
+        wifi = utils.retry_with_backoff(logger, connect_to_wifi, config.wifi_networks, logger)
     except Exception as e:
         logger.log_message("CRITICAL", f"Error occurred: {e}")
