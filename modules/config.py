@@ -40,6 +40,8 @@ MAX_SIZE_BYTES = 100 * 1024  # in bytes (= 100 KB) [max allowed size of log file
 
 DEBUG_MODE = True
 
+UPDATE_INTERVAL = 60 # sec [interval between weather readings update]
+
 #########################
 REPO_OWNER = 'imninety9'
 REPO_NAME = 'OTA-Update'
