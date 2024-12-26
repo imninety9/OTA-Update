@@ -18,3 +18,8 @@ to update a file in the microcontroller, just upload the changed file in this gi
                   e.g. update-main.py  
                   
                   or, update-modules/config.py
+
+###
+other available commands:
+	reboot
+	toggleled
