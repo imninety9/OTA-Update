@@ -138,7 +138,7 @@ def fetch_weather_data():
         return last_weather_data
     
 # function to gather and oragnize publishing data
-def gather_and_organize_data(sensors_data):
+def gather_and_organize_data(sensors_data, test):
     try:
         sensor_readings = sensors.read_sensors(sensors_data, logger)
         
@@ -154,6 +154,7 @@ def gather_and_organize_data(sensors_data):
         data[AIO_FEED_PRESS_OUT] = str(pressure_out)
         data[AIO_FEED_TEMP_BMP] = str(sensor_readings['temperature_bmp'])
         data[AIO_FEED_PRESS] = str(sensor_readings['pressure'])
+        data[AIO_FEED_STATUS] = str(test)
         
         return data
     except Exception as e:
@@ -339,6 +340,10 @@ def main():
     #++++++++++++++ LOOP ++++++++++++++++#
     # variable to keep track of the mqtt connection status
     MQTT_CONN = True
+    test = {'testcmseos': 0,
+    'testcmee': 0,
+    'testpe': 0,
+    'testwfe': 0}
     # Loop
     while True:
         try:
@@ -352,7 +357,8 @@ def main():
                                         light_sleep_duration=config.LONG_SLEEP_DURATION)
                         
                         MQTT_CONN = False # since, wifi got disconnected
-                    
+                        test['testwfe'] += 1
+                        
                     if not MQTT_CONN and wifi.isconnected():
                         # reconnect to mqtt server
                         setup_with_retry(mqtt_functions.connect_mqtt, client, logger, 
@@ -366,17 +372,20 @@ def main():
                     except OSError as e:
                         logger.log_message("ERROR", f"MQTT check message error (OSError): {e}")
                         MQTT_CONN = False
+                        test['testcmeos']+=1
                     except Exception as e:
                         logger.log_message("ERROR", f"MQTT check message error (Other): {e}")
                         MQTT_CONN = False
+                        test['testcmee']+=1
                     
                     # publish the data to mqtt server
-                    mqtt_functions.publish_data(client, gather_and_organize_data(sensors_data), logger)
+                    mqtt_functions.publish_data(client, gather_and_organize_data(sensors_data, test), logger)
                     gc.collect()
                 
                 except MQTTPublishingError as mpe:
                     logger.log_message("CRITICAL", f"MQTT data publishing error occurred: {mpe}. Reconnect the mqtt client.")
                     MQTT_CONN = False
+                    test['testpe']+=1
                     
                 except SetupError as se:
                     logger.log_message("CRITICAL", f"Setup error occurred: {se}. Resetting the Device...")
@@ -407,3 +416,5 @@ def main():
             
 if __name__ == "__main__":
     main()
+
+
