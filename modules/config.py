@@ -18,6 +18,10 @@ SPI_PIN_MOSI = 23
 SPI_PIN_SCK = 18
 SPI_PIN_CS = 5
 
+# LED Pin
+# set to None if system doesn't have an led
+LED_PIN = 2 # onboard led gpio pin for esp32
+
 owm_api_key = 'key'
 latitude = lat
 longitude = long
