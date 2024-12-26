@@ -3,7 +3,6 @@
 import gc
 import config
 import urequests
-from machine import reset
 from time import sleep
 import os
 
@@ -70,11 +69,11 @@ def dwnld_and_update(filename, logger: Logger): # filename is the full filename 
                 os.remove(filename) # remove the older version, if it exists
             os.rename(f'{filename}.new', filename)
             
-            logger.log_message("INFO", "Update successful. Restarting...", publish=True)
-            sleep(10)
-            reset()
+            logger.log_message("INFO", "Update successful.", publish=True)
+            return True
     except Exception as e:
-        logger.log_message("ERROR", f"Error in dwnld_and_update: {e}", publish=True)
+        logger.log_message("ERROR", f"Error in updating: {e}", publish=True)
+        return False
 
 ######################################
 if __name__ == '__main__':
