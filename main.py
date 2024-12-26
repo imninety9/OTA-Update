@@ -29,11 +29,11 @@ import utils
 import config # configuration file
 from custom_exceptions import SetupError, MQTTPublishingError
 from download_file import dwnld_and_update
+from led import LED
 
 from simple_logging import Logger  # Import the Logger class
 # Initialize logger instance
 logger = Logger(debug_mode=config.DEBUG_MODE)
-
 
 # Adafruit feeds
 AIO_FEED_TEMP = None
@@ -50,6 +50,7 @@ AIO_FEED_COMMAND = None  # Feed for subscription to recieve commands
 # openweathermap api
 url = None
 
+led = None
 
 '''
 Introducing a state machine-
@@ -180,7 +181,25 @@ def feed_callback(feed, msg):
         elif msg.strip().split("-")[0] == "update":
             logger.log_message("INFO", "Update command received. Updating now...", publish=True)
             sleep(1)  # Short delay before updating
-            dwnld_and_update(msg.strip().split("-")[-1], logger)
+            if led:
+                led.start_flashing()
+            if dwnld_and_update(msg.strip().split("-")[-1], logger): # if successful, then reboot to apply update
+                logger.log_message("INFO", "Resetting to apply the update.", publish=True)
+                sleep(1)
+                machine.reset() # Short delay before rebooting
+            else:
+                """maybe apply some retry logic"""
+                pass
+            if led:
+                led.stop_flashing()
+                
+            
+        elif msg.strip().lower() == "toggleled":
+            if led:
+                led.toggle()
+                logger.log_message("INFO", "LED toggled.", publish=True)
+            else:
+                logger.log_message("INFO", "No LED found.", publish=True)
             
         elif msg.strip().lower() == "logs":
             '''send logs'''
@@ -201,7 +220,15 @@ def setup_with_retry(function, *args, max_retries=config.MAX_RETRIES, backoff_ba
             return result # setup of given function successful
         else: # take critical action if all retries failed for the function i.e. None is returned by retry_with_backoff function
             logger.log_message("CRITICAL", f"Max retries reached for {function.__name__}. Entering light sleep for {light_sleep_duration} ms.")
+            
+            if led:
+                # indicate that the system is in critical state
+                led.on()
+            # enter light sleep
             utils.light_sleep(light_sleep_duration, logger) # light sleep for some given time
+            if led:
+                # indicate that the system has woken up by switching led off
+                led.off()
             
             raise SetupError(f"Setup of {function.__name__} failed") # after waking up raise the setup error
     
@@ -218,6 +245,9 @@ weather_fetch_counter = WEATHER_FETCH_DELAY # this counter will ensure that we o
 last_weather_data = [None, None, None, None] # cache the last weather data
 # Main function
 def main():
+    global logger
+    global led
+    
     print("Restarted!!!")
     sleep(5)
     
@@ -229,6 +259,10 @@ def main():
     #++++++++++++++++++++++++ SET-UP ++++++++++++++++++++#
     # SET-UP
     try:
+        if config.LED_PIN:
+            led = LED(config.LED_PIN, logger)
+            logger.log_message("INFO", "LED initialized successfully.")
+            
         # Generate AIO FEED and url variables
         generate_aio_feeds_and_url(config.AdafruitIO_USER, config.owm_api_key, config.latitude, config.longitude)
         
