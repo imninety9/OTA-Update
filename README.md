@@ -20,6 +20,10 @@ to update a file in the microcontroller, just upload the changed file in this gi
                   or, update-modules/config.py
 
 ### other available commands:
-reboot
+general format of command: <instruction-value>
 
-toggleled
+1. reboot   => to reboot the system
+
+2. toggleled    => to toggle the indicator led if present
+
+3. updateinterval-60   => to change the weather update interval for this session to 60 sec
