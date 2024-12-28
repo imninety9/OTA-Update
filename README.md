@@ -20,7 +20,7 @@ to update a file in the microcontroller, just upload the changed file in this gi
                   or, update-modules/config.py
 
 ### other available commands:
-general format of command: <instruction-value>
+general format of the command: instruction-value
 
 1. reboot   => to reboot the system
 
