@@ -10,7 +10,11 @@
 '''
 import machine
 import time
-
+'''
+# to enable imports from a subfolder named 'modules'
+import sys
+sys.path.append('/modules')
+'''
 from simple_logging import Logger  # Import the Logger class
 
 class LED:
@@ -114,7 +118,7 @@ if __name__=="__main__":
     import config
     
     # Initialize logger instance
-    logger = Logger(debug_mode=config.DEBUG_MODE)
+    logger = Logger(debug_mode=True)
     
     try:
         led = LED(config.LED_PIN, logger=logger)
@@ -126,6 +130,12 @@ if __name__=="__main__":
             time.sleep(2)
             
             led.blink()
+            
+            led.start_flashing()
+            now = time.time()
+            while time.time() - now < 10:
+                time.sleep(2)
+            led.stop_flashing()
     except Exception as e:
         logger.error(f"Error: {e}")
     

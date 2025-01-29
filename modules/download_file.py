@@ -5,11 +5,11 @@ import gc  # Garbage collector for memory management
 import time  # For retry delay
 import os
 import hashlib # For checksum validation
-
+'''
 # to enable imports from a subfolder named 'modules'
 import sys
 sys.path.append('/modules')
-
+'''
 from simple_logging import Logger # Import the Logger class
     
 # function to download a file from github public repo over the air
@@ -103,7 +103,7 @@ def download_large_file(url, filename, max_retries=3, retry_delay=5,
             return True # Exit function on successful download
 
         except OSError as e:
-            logger.error("OS error occurred. Retrying...", publish=True)
+            logger.error(f"OS error occurred: {e}", publish=True)
             # Handle retry logic
             retry_count += 1
             if retry_count < max_retries:
@@ -112,11 +112,19 @@ def download_large_file(url, filename, max_retries=3, retry_delay=5,
                 time.sleep(retry_interval)
             else:
                 logger.error(f"Max retries exceeded. Failed to download {filename}.", publish=True)
-            return False
+                return False
 
         except Exception as e:
-            print(f"\nUnexpected error: {e}")
-            return False
+            logger.error(f"\nUnexpected error: {e}", publish=True)
+            # Handle retry logic
+            retry_count += 1
+            if retry_count < max_retries:
+                retry_interval = retry_delay * (2 ** (retry_count - 1))  # Exponential backoff
+                logger.info(f"Retrying in {retry_interval} seconds...", publish=True)
+                time.sleep(retry_interval)
+            else:
+                logger.error(f"Max retries exceeded. Failed to download {filename}.", publish=True)
+                return False
         
         # NOTE: This 'finally' block is always executed once even if 'try' block succeeds, even if exception occurs in 'try' block or even if function returns in 'try' or 'except' block
         finally: # before retrying or exiting the function
@@ -145,6 +153,8 @@ def dwnld_and_update(url, filename, checksum=None,  # filename is the full filen
             
             logger.info("Update successful.", publish=True)
             return True
+        else:
+            return False
     except Exception as e:
         logger.error(f"Error in updating: {e}", publish=True)
         return False
