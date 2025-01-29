@@ -13,7 +13,7 @@ from time import sleep
 from simple_logging import Logger  # Import the Logger class
 
 # Internet connectivity check
-def check_internet(logger: Logger, hosts=[("8.8.8.8", 53), ("1.1.1.1", 53)], timeout=3): # logger is expected to be of type Logger (i.e. an instance of Logger class)
+def check_internet(hosts=[("8.8.8.8", 53), ("1.1.1.1", 53)], timeout=3, logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
     """Check if the device has internet connectivity by attempting to open a socket to a DNS server."""
     '''Added a fallback to a secondary server (e.g., Cloudflare 1.1.1.1) in case the primary check fails.'''
     for host, port in hosts:
@@ -22,11 +22,11 @@ def check_internet(logger: Logger, hosts=[("8.8.8.8", 53), ("1.1.1.1", 53)], tim
             sock.settimeout(timeout)
             sock.connect((host, port))
             sock.close()
-            logger.log_message("INFO", f"Internet check successful with {host}:{port}.")
+            logger.info(f"Internet check successful with {host}:{port}.")
             return True
         except Exception as e:
-            logger.log_message("ERROR", f"Failed to connect to {host}:{port}: {e}")
-    logger.log_message("ERROR", "Internet check failed for all hosts.")
+            logger.error(f"Failed to connect to {host}:{port}: {e}")
+    logger.error("Internet check failed for all hosts.")
     return False
     '''
     Explanation-
@@ -38,38 +38,48 @@ def check_internet(logger: Logger, hosts=[("8.8.8.8", 53), ("1.1.1.1", 53)], tim
     '''
 
 # Disable access point (AP) mode if required
-def disable_ap_mode(logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
+def disable_ap_mode(logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
     try:
         ap = network.WLAN(network.AP_IF)
         if ap.active():
             ap.active(False)
-            logger.log_message("INFO", "WiFi AP mode disabled.")
+            logger.info("WiFi AP mode disabled.")
     except Exception as e:
-        logger.log_message("ERROR", f"Failed to disable WiFi AP mode: {e}")
+        logger.error(f"Failed to disable WiFi AP mode: {e}")
 
+# Disable station aka client (STA) mode if required
+def disable_sta_mode(logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
+    try:
+        sta = network.WLAN(network.STA_IF)
+        if sta.active():
+            sta.active(False)
+            logger.info("WiFi STA mode disabled.")
+    except Exception as e:
+        logger.error(f"Failed to disable WiFi AP mode: {e}")
+        
 # Connect to a WiFi given a list of wifi_networks with their ssid and priority
-def connect_to_wifi(wifi_networks, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
+def connect_to_wifi(wifi_networks, logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     
     try:
         if wlan.isconnected():
-            logger.log_message("INFO", f"Already connected to {wlan.config('essid')}")
-            if check_internet(logger):
-                logger.log_message("INFO", "Internet is accessible.")
+            logger.info(f"Already connected to {wlan.config('essid')}")
+            if check_internet(logger=logger):
+                logger.info("Internet is accessible.")
                 return wlan # DONE, already connected to a network with internet connectivity (it may not be in the wifi_networks list)
             else:
-                logger.log_message("WARNING", "Connected WiFi has no internet. Disconnecting...")
+                logger.warning("Connected WiFi has no internet. Disconnecting...")
                 wlan.disconnect()
     except Exception as e:
-        logger.log_message("ERROR", f"Error while checking initial connection: {e}")
+        logger.error(f"Error while checking initial connection: {e}")
 
-    logger.log_message("INFO", "Scanning for available networks...")
+    logger.info("Scanning for available networks...")
     try:
         available_networks = wlan.scan()
         available_ssids = {net[0].decode('utf-8') for net in available_networks}
     except Exception as e:
-        logger.log_message("ERROR", f"Error during WiFi scan: {e}")
+        logger.error(f"Error during WiFi scan: {e}")
         return None
     
     # Sort given networks by priority (highest first) [uncomment if not pre-sorted]
@@ -77,40 +87,43 @@ def connect_to_wifi(wifi_networks, logger: Logger): # logger is expected to be o
     for wifi_network in wifi_networks: # wifi_networks is the list of networks given with their priority
         try:
             if wifi_network['ssid'] in available_ssids:
-                logger.log_message("INFO", f"Trying to connect to {wifi_network['ssid']}...")
+                logger.info(f"Trying to connect to {wifi_network['ssid']}...")
                 wlan.connect(wifi_network['ssid'], wifi_network['password'])
 
                 timeout = 10  # seconds
                 for _ in range(timeout):
                     if wlan.isconnected():
-                        logger.log_message("INFO", f"Connected to {wifi_network['ssid']}. Checking internet...")
-                        if check_internet(logger):
-                            logger.log_message("INFO", "Internet is accessible.")
+                        logger.info(f"Connected to {wifi_network['ssid']}. Checking internet...")
+                        if check_internet(logger=logger):
+                            logger.info("Internet is accessible.")
                             return wlan
                         else:
-                            logger.log_message("WARNING", "No internet. Disconnecting...")
+                            logger.warning("No internet. Disconnecting...")
                             wlan.disconnect()
                             break
                     sleep(1)
 
-                logger.log_message("WARNING", f"Failed to connect to {wifi_network['ssid']}")
+                logger.warning(f"Failed to connect to {wifi_network['ssid']}")
         except Exception as e:
-            logger.log_message("ERROR", f"Error during WiFi connection attempt: {e}")
+            logger.error(f"Error during WiFi connection attempt: {e}")
             continue
             
-    logger.log_message("ERROR", "Unable to connect to any given WiFi network.")
+    logger.warning("Unable to connect to any given WiFi network.")
     return None
 
+        
 # Main execution
 if __name__ == "__main__":
+    import utils
+    import config
+    
+    # Initialize the logger
+    logger = Logger(debug_mode=config.DEBUG_MODE)
     try:
-        import utils
-        import config
-        
-        # Initialize the logger
-        logger = Logger(debug_mode=config.DEBUG_MODE)
-        
-        disable_ap_mode(logger)
-        wifi = utils.retry_with_backoff(logger, connect_to_wifi, config.wifi_networks, logger)
+        disable_ap_mode(logger=logger)
+        wifi = utils.retry_with_backoff(connect_to_wifi, config.wifi_networks, logger=logger)
     except Exception as e:
-        logger.log_message("CRITICAL", f"Error occurred: {e}")
+        logger.critical(f"Error occurred: {e}")
+    finally:
+        disable_sta_mode(logger=logger)
+        

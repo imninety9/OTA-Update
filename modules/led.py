@@ -14,16 +14,23 @@ import time
 from simple_logging import Logger  # Import the Logger class
 
 class LED:
-    def __init__(self, pin_number, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
+    def __init__(self, pin_number,
+                 logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
         """
         Initializes the LED on a given pin.
 
         :param pin: Pin number to which the LED is connected.
         """
-        self.led_pin = machine.Pin(pin_number, machine.Pin.OUT)
-        self.sudden_blinking = False  # Flag to track if sudden blinking should continue
-        self.flashing = False  # Specific flag for flashing mode
-        self.timer = machine.Timer(0)  # Initialize timer on timer 0
+        try:
+            self.led_pin = machine.Pin(pin_number, machine.Pin.OUT)
+            self.sudden_blinking = False  # Flag to track if sudden blinking should continue
+            self.flashing = False  # Specific flag for flashing mode
+            self.timer = machine.Timer(0)  # Initialize timer on timer 0
+            self.is_available = True
+            logger.info("LED initialized successfully.")
+        except Exception as e:
+            self.is_available = False
+            raise # raise if initialization failed to let the caller know about it
 
     def on(self):
         """Turn the LED on."""
@@ -101,3 +108,24 @@ class LED:
         self.timer.deinit()  # Stop the timer
         self.off()  # Ensure the LED is turned off
     #---------------------------------------------------
+
+####################################
+if __name__=="__main__":
+    import config
+    
+    # Initialize logger instance
+    logger = Logger(debug_mode=config.DEBUG_MODE)
+    
+    try:
+        led = LED(config.LED_PIN, logger=logger)
+        if led.is_available:
+            led.on()
+            time.sleep(2)
+            led.off()
+            
+            time.sleep(2)
+            
+            led.blink()
+    except Exception as e:
+        logger.error(f"Error: {e}")
+    

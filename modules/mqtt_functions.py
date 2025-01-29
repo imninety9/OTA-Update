@@ -161,9 +161,9 @@ class MQTTCallbackHandler:
 ----------------
 '''
 
-# callback handler
+# 2. callback handler
 class CallbackHandler:
-    def __init__(self, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
+    def __init__(self, logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
         self.logger = logger
         
     # callback function
@@ -176,13 +176,15 @@ class CallbackHandler:
         try:
             feed = feed.decode('utf-8')
             msg = msg.decode('utf-8')
-            self.logger.log_message("INFO", f"Received message on {feed}: {msg}", publish = True)
+            self.logger.info(f"Received message on {feed}: {msg}", publish = True)
             return feed, msg
         except Exception as e:
-            self.logger.log_message("ERROR", f"Failed to read the received message: {e}")
+            self.logger.error(f"Failed to read the received message: {e}")
 
 # Initialize mqtt client
-def init_mqtt(client_id, broker, port, user, password, keepalive, will_feed, will_message, callback, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
+def init_mqtt(client_id, broker, port, user, password, keepalive,
+              will_feed, will_message, callback,
+              logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
     """Initialize the MQTT client."""
     try:
         client = MQTTClient(
@@ -198,7 +200,7 @@ def init_mqtt(client_id, broker, port, user, password, keepalive, will_feed, wil
         client.set_callback(callback)
         return client
     except Exception as e:
-        logger.log_message("ERROR", f"Failed to initialize MQTT client: {e}")
+        logger.error(f"Failed to initialize MQTT client: {e}")
         return None
 '''
 Why 'return None' becomes Redundant after a 'raise'?
@@ -213,71 +215,96 @@ If the exception is not handled, the program will crash, and no further code wil
 '''
     
 # Connect mqtt client
-def connect_mqtt(client, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
-    """Connect to MQTT broker with retries."""
+def connect_mqtt(client, logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
+    """Connect to MQTT broker"""
     try:
         client.connect()
-        logger.log_message("INFO", "Connected to MQTT broker.", publish=True)
+        logger.info("Connected to MQTT broker.", publish=True)
         return client
     except Exception as e:
-        logger.log_message("ERROR", f"MQTT connection attempt failed: {e}")
+        logger.error(f"MQTT connection attempt failed: {e}")
         return None
+    
+# Disconnect mqtt client
+def disconnect_mqtt(client, logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
+    """Disconnect to MQTT broker"""
+    try:
+        client.disconnect()
+        logger.info("Disconnected from MQTT broker.")
+    except Exception as e:
+        logger.error(f"An error occurred during MQTT disconnect: {e}")
 
 # Subscribe to a feed
-def subscribe_feed(client, feed, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
+def subscribe_feed(client, feed, logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
     '''function to subscribe to a feed to receive message'''
     try:
         client.subscribe(feed, qos = 2)
-        logger.log_message("INFO", f"Subscribed to feed: {feed}", publish = True)
+        logger.info(f"Subscribed to feed: {feed}", publish = True)
     except Exception as e:
-        logger.log_message("ERROR", f"Failed to subscribe to feed {feed}: {e}", publish = True)
-        
+        logger.error(f"Failed to subscribe to feed {feed}: {e}", publish = True)
+
+# connect mqtt client and subscribe to given feeds
+def connect_and_subscribe(client, feeds, logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
+    '''function to connect to mqtt and subscribe to given feeds'''
+    try:
+        client.connect()
+        for feed in feeds:
+            client.subscribe(feed, qos = 2)
+        logger.info(f"Connected to MQTT broker and Subscribed to feeds: {feeds}", publish = True)
+        return client
+    except Exception as e:
+        logger.error(f"MQTT connection and subscription attempt failed: {e}")
+        return None
+    
 # Publish data to mqtt server
-def publish_data(client, data, logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
-    # data is a dictionary {"feed": "msg"}
+def publish_data(client, data, logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
+    # data is expected to be a dictionary {"feed": "msg"}
     ''' publish the given data to their corresponding feeds'''
     try:
         for feed, msg in data.items():
-            if feed is not None and msg is not None:
+            if feed:
                 client.publish(feed, msg, qos=0)
     except Exception as e:
-        logger.log_message("ERROR", f"Publishing data failed: {e}")
+        logger.error(f"Publishing data failed: {e}")
         raise MQTTPublishingError("MQTT Data Publishing Failed")
 
 
 # Example usage
 if __name__ == "__main__":
+    import connect_wifi
+    import utils
+    import config
+    
+    # Initialize the logger
+    logger = Logger(debug_mode=config.DEBUG_MODE)
     try:
-        import connect_wifi
-        import utils
-        import config
-        
-        # Initialize the logger
-        logger = Logger(debug_mode=config.DEBUG_MODE)
-        
         # Connect to Wi-Fi
-        wifi = utils.retry_with_backoff(logger, connect_wifi.connect_to_wifi, config.wifi_networks, logger)
+        wifi = utils.retry_with_backoff(connect_wifi.connect_to_wifi, config.wifi_networks, logger=logger)
             
         # feed callback handler
-        callback_handler = CallbackHandler(logger)
+        callback_handler = CallbackHandler(logger=logger)
         
         # Initialize MQTT
-        client = utils.retry_with_backoff(logger, init_mqtt,
-            config.AdafruitIO_USER,
-            config.AdafruitIO_SERVER,
-            config.AdafruitIO_PORT,
-            config.AdafruitIO_USER,
-            config.AdafruitIO_KEY,
+        client = utils.retry_with_backoff(init_mqtt,
+            config.mqtt[config.BROKER]["client_id"],
+            config.mqtt[config.BROKER]["server"],
+            config.mqtt[config.BROKER]["port"],
+            config.mqtt[config.BROKER]["user"],
+            config.mqtt[config.BROKER]["password"],
             config.KEEP_ALIVE_INTERVAL,
-            f"{config.AdafruitIO_USER}/feeds/errors",  # LWT Topic
-            b"ESP32 disconnected unexpectedly",
+            config.mqtt[config.BROKER]["feeds"]["status"],  # LWT Topic
+            config.LAST_WILL_MESSAGE,
             callback_handler.feed_callback,
-            logger
+            logger=logger
         )
-
+        
         # Connect to MQTT broker
-        if client and wifi.isconnected():
-            utils.retry_with_backoff(logger, connect_mqtt, client, logger)
+        if client and wifi and wifi.isconnected(): # wifi will be None if all retires failed
+            utils.retry_with_backoff(connect_mqtt, client, logger=logger)
         
     except Exception as e:
-        logger.log_message("ERROR", f"Error: {e}")
+        logger.error(f"Error: {e}")
+        
+    finally:
+        if client: # actually, if we haven't yet connected to mqtt then it will raise an error because client.sock remains None and disconnect tries to write to client.sock [see mqtt.simple library for details]
+            disconnect_mqtt(client, logger=logger)

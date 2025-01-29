@@ -4,63 +4,62 @@ from machine import Pin, SPI
 import sdcard
 from os import VfsFat, mount, umount
 
-import config
-
 from simple_logging import Logger  # Import the Logger class
 
-# initialize sdcard
-def initialize_sd(logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
-    # Define SPI pin configurations
-    SPI_PIN_MISO = config.SPI_PIN_MISO #19
-    SPI_PIN_MOSI = config.SPI_PIN_MOSI #23
-    SPI_PIN_SCK = config.SPI_PIN_SCK #18
-    SPI_PIN_CS = config.SPI_PIN_CS #5  # You can choose any available GPIO pin for CS
-    try:
-        # Initialize SPI communication
-        spi = SPI(
-            1,
-            baudrate=10000000,
-            polarity=0,
-            phase=0,
-            sck=Pin(SPI_PIN_SCK),
-            mosi=Pin(SPI_PIN_MOSI),
-            miso=Pin(SPI_PIN_MISO)
-        )
-        cs = Pin(SPI_PIN_CS)
-        # Initialize SD card object
-        sd = sdcard.SDCard(spi, cs)
-        # Mount the SD card
-        vfs = VfsFat(sd)
-        mount(vfs, '/sd')
-        logger.log_message('INFO', "SD card initialialized")
-        return True
-    except Exception as e:
-        logger.log_message('ERROR', f"Failed to initialize sd card: {e}")
-        return False
+class SDCard:
+    def __init__(self, spi_pin_miso, spi_pin_mosi, spi_pin_sck, spi_pin_cs,
+                 logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
+        # initialize sdcard
+        try: 
+            # Initialize SPI communication
+            self.spi = SPI(
+                1,
+                baudrate=10000000,
+                polarity=0,
+                phase=0,
+                sck=Pin(spi_pin_sck),
+                mosi=Pin(spi_pin_mosi),
+                miso=Pin(spi_pin_miso)
+            )
+            self.cs = Pin(spi_pin_cs)
+            # Initialize SD card object
+            self.sd = sdcard.SDCard(self.spi, self.cs)
+            # Mount the SD card
+            self.vfs = VfsFat(self.sd)
+            mount(self.vfs, '/sd')
+            logger.info("SD card initialialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize sd card: {e}")
+            raise # raise if initialization failed to let the caller know about it
 
-# unmount the sd card
-def unmount_sd_card(logger: Logger): # logger is expected to be of type Logger (i.e. an instance of Logger class)
-    try:
-        umount('/sd')
-        logger.log_message('INFO', "SD card unmounted successfully.")
-    except Exception as e:
-        logger.log_message('ERROR', f"Error unmounting SD card: {e}")
+    # unmount the sd card
+    def unmount_sd_card(self, logger: Logger = Logger()): # logger is expected to be of type Logger (i.e. an instance of Logger class) [with default value of Logger()]
+        try:
+            umount('/sd')
+            logger.info("SD card unmounted successfully.")
+        except Exception as e:
+            logger.error(f"Error unmounting SD card: {e}")
         
 
 ####################################
 if __name__ == "__main__":
+    import utils
+    import config
+        
+    # Initialize the logger
+    logger = Logger(debug_mode=config.DEBUG_MODE)
     try:
-        import utils
-        
-        # Initialize the logger
-        logger = Logger(debug_mode=config.DEBUG_MODE)
-        
         # initialize sd card
-        utils.retry_with_backoff(logger, initialize_sd, logger, max_retries=5, backoff_base=5)
+        
+        sdcard = utils.retry_with_backoff(SDCard, config.SPI_PIN_MISO, config.SPI_PIN_MOSI,
+                                 config.SPI_PIN_SCK, config.SPI_PIN_CS,
+                                max_retries=5, backoff_base=5,
+                                logger=logger)
         
         # unmount sd card
-        unmount_sd_card(logger)
+        if sdcard:
+            sdcard.unmount_sd_card(logger=logger)
         
     except Exception as e:
-        logger.log_message("ERROR", f"Error: {e}")
+        logger.error(f"Error: {e}")
         
