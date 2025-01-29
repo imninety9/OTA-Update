@@ -290,7 +290,8 @@ class CallbackHandler:
                 new_parameters = CallbackHandler.python_dict_str_to_json_to_python_dict(msg[1])
     
                 CallbackHandler.replace_lines_in_file('modules/config.py', new_parameters)
-                return
+                sleep(1) # Short delay before rebooting
+                machine.reset() # reboot to apply changes
                 
             elif instruction == "logs":
                 '''send logs'''
