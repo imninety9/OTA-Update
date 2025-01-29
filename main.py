@@ -253,7 +253,7 @@ class CallbackHandler:
                 if len(msg) == 3: checksum = msg[2]
                 else: checksum = None
                 
-                link = f'https://raw.githubusercontent.com/{config.REPO_OWNER}/{config.REPO_NAME}/main/{filename}'
+                link = f'http://raw.githubusercontent.com/{config.REPO_OWNER}/{config.REPO_NAME}/main/{filename}' # Note: we are using http request rather than https to reduce computation on esp32
                 if dwnld_and_update(link, filename, checksum=checksum, logger=self.logger): # if successful, then reboot to apply update
                     self.logger.info("Resetting to apply the updates.", publish=True)
                     if self.led: self.led.stop_flashing()
@@ -289,9 +289,12 @@ class CallbackHandler:
                 # Note: parameters and their new values are supposed to be in string representation of a Python dictionary
                 new_parameters = CallbackHandler.python_dict_str_to_json_to_python_dict(msg[1])
     
-                CallbackHandler.replace_lines_in_file('modules/config.py', new_parameters)
-                sleep(1) # Short delay before rebooting
-                machine.reset() # reboot to apply changes
+                if CallbackHandler.replace_lines_in_file('modules/config.py', new_parameters):
+                    self.logger.info(f"Replaced '{new_parameters}' in config.py.", publish=True)
+                    sleep(1) # Short delay before rebooting
+                    machine.reset() # reboot to apply changes
+                else:
+                    self.logger.info(f"No matching line found for '{new_parameters}'.", publish=True)
                 
             elif instruction == "logs":
                 '''send logs'''
@@ -336,11 +339,11 @@ class CallbackHandler:
             import os
             os.remove(file_path)
             os.rename(temp_file_path, file_path)
-            self.logger.info(f"Replaced '{new_lines}' in config.py.", publish=True)
+            return True
         else:
             # Clean up the temporary file if no changes were made
             os.remove(temp_file_path)
-            self.logger.info(f"No matching line found for '{new_lines}'.", publish=True)
+            return False
     
     @staticmethod
     # convert a string representation of a Python dictionary to a Python dictionary by first converting it to a JSON
@@ -633,6 +636,12 @@ def main():
     finally:
         if ds:
              ds.disable_alarm()
+        if led:
+            if led.flashing:
+                led.stop_flashing()
+            if led.sudden_blinking:
+                led.stop_sudden_blink()
+            led.off()
         
        #=====================================================================================     
 #################################################################################################
